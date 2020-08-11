@@ -1,0 +1,31 @@
+node
+{
+    def buildNumber = BUILD_NUMBER
+    def mavenHome = tool name: "maven3.6.3" 
+    stage('Git CheckOut')
+    {
+    git branch: 'development', credentialsId: '188c6cdf-f49d-4dc5-b0d5-722196064359', url: 'https://github.com/at-ec-projects/riders-application.git'
+    }
+    stage('Build')
+    {
+        sh "${mavenHome}/bin/mvn clean package"
+    }
+    stage('Build Docker image')
+    {
+    sh "docker build -t atecprojects/riders-application:${buildNumber} ."
+    }
+    stage('Push DockerImage To DockerRepository')
+    {
+    withCredentials([string(credentialsId: 'Docker_Hub_Pwd', variable: 'Docker_Hub_Pwd')])
+    {
+    sh "docker login -u atecprojects -p ${Docker_Hub_Pwd}"
+    }
+    sh "docker push atecprojects/riders-application:${buildNumber}"
+    }
+    stage('Upload DockerImage As A Container')
+    sshagent(['Docker_Private_Key'])
+    {
+        sh "ssh -o StrictHostKeyChecking=no ubuntu@13.126.192.1 docker rm -f ridersapp || true"
+        sh "ssh -o StrictHostKeyChecking=no ubuntu@13.126.192.1 docker run -d -p 9090:8080 --name ridersapp atecprojects/riders-application:${buildNumber}"
+    }
+}
